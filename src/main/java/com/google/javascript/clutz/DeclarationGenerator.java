@@ -941,10 +941,9 @@ class DeclarationGenerator {
     // In partial mode, emit goog.provided symbols in goog.module/dollar style, since goog.module
     // code can't tell if its import came from a goog.provide or a goog.module style file
     boolean rewroteGoogProvide = false;
-    if (opts.partialInput && isDefault && emitName.contains(".")) {
+    if (shouldRewriteGoogProvideName(emitName, isDefault)) {
       namespace = "";
-      String googModuleEmitName = "module$exports$" + emitName.replace(".", "$");
-      importRenameMap.put(emitName, googModuleEmitName);
+      String googModuleEmitName = rewriteGoogProvideName(emitName);
       emitName = googModuleEmitName;
       rewroteGoogProvide = true;
     }
@@ -1061,6 +1060,10 @@ class DeclarationGenerator {
     if (rewroteGoogProvide) {
       declareGoogProvideSupplementalNamespaces(emitName);
     }
+  }
+
+  private boolean shouldRewriteGoogProvideName(String emitName, boolean isDefault) {
+    return opts.partialInput && isDefault && !emitName.contains("module$exports$") && !emitName.contains("module$contents$");
   }
 
   private boolean isValidJSProperty(String name) {
@@ -1210,8 +1213,8 @@ class DeclarationGenerator {
     }
     // In partial mode, clutz emits goog.provided symbols in goog.module/dollar style, so the alias
     // has to match
-    if (opts.partialInput && isDefault && emitName.contains(".")) {
-      emitName = "module$exports$" + emitName.replace(".", "$");
+    if (shouldRewriteGoogProvideName(emitName, isDefault)) {
+      emitName = rewriteGoogProvideName(emitName);
     }
     emitNoSpace("declare module '");
     emitNoSpace("goog:" + name);
@@ -1236,6 +1239,10 @@ class DeclarationGenerator {
     unindent();
     emit("}");
     emitBreak();
+  }
+
+  private String rewriteGoogProvideName(String emitName) {
+    return "module$exports$" + emitName.replace(".", "$");
   }
 
   static List<SourceFile> getDefaultExterns(Options opts) {
@@ -1373,7 +1380,7 @@ class DeclarationGenerator {
 
         if (isOrdinaryFunction(ftype)) {
           maybeEmitJsDoc(symbol.getJSDocInfo(), /* ignoreParams */ false);
-          visitFunctionExpression(getUnqualifiedName(emitName), ftype);
+          visitFunctionExpression(getUnqualifiedName(symbol), ftype);
           return;
         }
 
@@ -1383,14 +1390,14 @@ class DeclarationGenerator {
         // Since closure inlines all aliases before this step, check against
         // the type name.
         if (!isAliasedClassOrInterface(symbol, ftype)) {
-          visitClassOrInterface(getUnqualifiedName(emitName), ftype);
+          visitClassOrInterface(getUnqualifiedName(symbol), ftype);
         } else {
-          visitClassOrInterfaceAlias(getUnqualifiedName(emitName), ftype);
+          visitClassOrInterfaceAlias(getUnqualifiedName(symbol), ftype);
         }
       } else {
         maybeEmitJsDoc(symbol.getJSDocInfo(), /* ignoreParams */ false);
         if (type.isEnumType()) {
-          visitEnumType(emitName, emitName, (EnumType) type);
+          visitEnumType(getUnqualifiedName(symbol), emitName, (EnumType) type);
           return;
         }
         if (isTypedef(type)) {
@@ -1802,10 +1809,16 @@ class DeclarationGenerator {
           // in displayNameParts - in this case all the prefix parts are replaced with the rename
           displayNamePrefix.clear();
           displayNamePrefix.add(importRenameMap.get(baseDisplayName));
-          displayName = Joiner.on(".").join(displayNameParts);
-          break;
+          return Joiner.on(".").join(displayNameParts);
         }
       }
+//      for (TypedVar symbol : compiler.getTopScope().getAllSymbols()) {
+//        if (symbol.getName().equals(displayName)) {
+//          if (!displayName.contains("module$exports$") && !displayName.contains("module$contents$")) {
+//            return rewriteGoogProvideName(displayName);
+//          }
+//        }
+//      }
       return displayName;
     }
 
